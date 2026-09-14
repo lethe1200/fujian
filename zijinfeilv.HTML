@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>币安资金费率 · 多币种走势与均线</title>
+    <!-- Chart.js 轻量绘图 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0b0e14;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            color: #e6edf3;
+            padding: 2rem 1.5rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1300px;
+            width: 100%;
+            background: #141a24;
+            border-radius: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.03);
+            padding: 2rem;
+            transition: all 0.2s;
+        }
+
+        .header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.8rem;
+            gap: 1.5rem;
+        }
+
+        .title-section h1 {
+            font-size: 1.9rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #ffffff 0%, #b0c4de 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .title-section h1 span {
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.2rem 1rem;
+            border-radius: 20px;
+            color: #a0b4c9;
+            -webkit-text-fill-color: #a0b4c9;
+            background: #1e2a36;
+            border: 1px solid #2f3d4b;
+        }
+
+        .sub {
+            color: #8b9eb0;
+            font-size: 0.9rem;
+            margin-top: 0.4rem;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        /* 币种选择器 */
+        .symbol-selector {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: #1e2a36;
+            border-radius: 40px;
+            padding: 0.25rem 0.25rem 0.25rem 1.2rem;
+            border: 1px solid #2f3d4b;
+        }
+
+        .symbol-selector label {
+            font-size: 0.85rem;
+            color: #a0b4c9;
+            font-weight: 500;
+        }
+
+        select {
+            background: #0f1620;
+            border: none;
+            color: #e6edf3;
+            font-weight: 600;
+            padding: 0.55rem 2.2rem 0.55rem 1rem;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a0b4c9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.8rem center;
+            background-size: 14px;
+            min-width: 160px;
+        }
+
+        select:hover {
+            background-color: #1a2533;
+        }
+
+        /* 自定义币种输入 */
+        .custom-symbol-box {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: #1e2a36;
+            border-radius: 40px;
+            padding: 0.25rem 0.25rem 0.25rem 1.2rem;
+            border: 1px solid #2f3d4b;
+            transition: border-color 0.2s;
+        }
+
+        .custom-symbol-box:focus-within {
+            border-color: #2f7cf6;
+        }
+
+        .custom-symbol-box label {
+            font-size: 0.85rem;
+            color: #a0b4c9;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .custom-symbol-box input {
+            background: #0f1620;
+            border: none;
+            color: #e6edf3;
+            font-weight: 600;
+            padding: 0.55rem 0.8rem;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            outline: none;
+            width: 130px;
+            text-transform: uppercase;
+        }
+
+        .custom-symbol-box input::placeholder {
+            color: #4a5e72;
+            text-transform: none;
+            font-weight: 400;
+        }
+
+        .custom-symbol-box button {
+            background: #2f7cf6;
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 0.55rem 1.2rem;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .custom-symbol-box button:hover {
+            background: #3d8aff;
+        }
+
+        .custom-symbol-box button:disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* 数量选择器 */
+        .limit-selector {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #1e2a36;
+            border-radius: 40px;
+            padding: 0.25rem 0.25rem 0.25rem 1rem;
+            border: 1px solid #2f3d4b;
+        }
+
+        .limit-selector label {
+            font-size: 0.85rem;
+            color: #a0b4c9;
+            white-space: nowrap;
+        }
+
+        /* 均线开关 */
+        .ma-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background: #1e2a36;
+            border-radius: 40px;
+            padding: 0.25rem 0.25rem 0.25rem 1.2rem;
+            border: 1px solid #2f3d4b;
+            cursor: pointer;
+            user-select: none;
+            transition: border-color 0.2s;
+        }
+
+        .ma-toggle:hover {
+            border-color: #3d8aff;
+        }
+
+        .ma-toggle.active {
+            border-color: #2f7cf6;
+            background: #1a2a40;
+        }
+
+        .ma-toggle .toggle-indicator {
+            width: 40px;
+            height: 22px;
+            background: #2a3441;
+            border-radius: 20px;
+            position: relative;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .ma-toggle.active .toggle-indicator {
+            background: #2f7cf6;
+        }
+
+        .ma-toggle .toggle-indicator::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.2s;
+        }
+
+        .ma-toggle.active .toggle-indicator::after {
+            transform: translateX(18px);
+        }
+
+        .ma-toggle span {
+            font-size: 0.85rem;
+            color: #a0b4c9;
+            font-weight: 500;
+            white-space: nowrap;
+            padding-right: 0.6rem;
+        }
+
+        .ma-toggle.active span {
+            color: #e6edf3;
+        }
+
+        button.main-btn {
+            background: #2f7cf6;
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 0.7rem 1.8rem;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 8px 16px -4px rgba(47, 124, 246, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            white-space: nowrap;
+        }
+
+        button.main-btn:hover {
+            background: #3d8aff;
+            transform: translateY(-1px);
+            box-shadow: 0 12px 20px -6px rgba(47, 124, 246, 0.5);
+        }
+
+        button.main-btn:active {
+            transform: translateY(1px);
+        }
+
+        button.main-btn:disabled {
+            opacity: 0.5;
+            pointer-events: none;
+            box-shadow: none;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 540px;
+            width: 100%;
+            margin: 1.5rem 0 0.5rem;
+            background: #0f1620;
+            border-radius: 24px;
+            padding: 1rem 1rem 0.5rem;
+            border: 1px solid #1f2c3a;
+        }
+
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.2rem;
+            font-size: 0.85rem;
+            color: #7a8fa3;
+            padding: 0 0.3rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .last-updated {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2f7cf6;
+            box-shadow: 0 0 8px #2f7cf6;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        .error-msg {
+            background: #2a1a1a;
+            border-left: 4px solid #e54d4d;
+            color: #f0b8b8;
+            padding: 0.8rem 1.2rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .legend-note {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.2rem;
+            font-size: 0.8rem;
+            color: #8b9eb0;
+            margin-top: 0.8rem;
+            justify-content: center;
+        }
+
+        .legend-note span::before {
+            content: "•";
+            margin-right: 0.4rem;
+            font-size: 1.2rem;
+            vertical-align: middle;
+            color: #2f7cf6;
+        }
+
+        .footer-note {
+            margin-top: 1.2rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #4a5e72;
+            border-top: 1px solid #1d2a36;
+            padding-top: 1.2rem;
+            letter-spacing: 0.3px;
+        }
+
+        /* 小屏适配 */
+        @media (max-width: 900px) {
+            .container { padding: 1.2rem; }
+            .title-section h1 { font-size: 1.5rem; }
+            .header { flex-direction: column; align-items: stretch; }
+            .controls { justify-content: space-between; }
+            .chart-wrapper { height: 400px; }
+            .custom-symbol-box input { width: 100px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title-section">
+            <h1>
+                📊 资金费率走势
+                <span>Binance 永续</span>
+            </h1>
+            <div class="sub" id="currentSymbolHint">当前显示：BTC</div>
+        </div>
+        <div class="controls">
+            <!-- 币种选择 (9个预设) -->
+            <div class="symbol-selector">
+                <label for="symbolSelect">币种</label>
+                <select id="symbolSelect">
+                    <option value="BTCUSDT" selected>BTC</option>
+                    <option value="ETHUSDT">ETH</option>
+                    <option value="BNBUSDT">BNB</option>
+                    <option value="XRPUSDT">XRP</option>
+                    <option value="SOLUSDT">SOL</option>
+                    <option value="TRXUSDT">TRX</option>
+                    <option value="HYPEUSDT">HYPE</option>
+                    <option value="ZECUSDT">ZEC</option>
+                    <option value="DOGEUSDT">DOGE</option>
+                </select>
+            </div>
+            <!-- 自定义币种输入 -->
+            <div class="custom-symbol-box">
+                <label for="customSymbolInput">任意币种</label>
+                <input type="text" id="customSymbolInput" placeholder="如 1000PEPEUSDT" maxlength="20" spellcheck="false">
+                <button id="customSymbolBtn" type="button">查询</button>
+            </div>
+            <!-- 数据量选择 -->
+            <div class="limit-selector">
+                <label for="limitSelect">数据量</label>
+                <select id="limitSelect">
+                    <option value="50">50</option>
+                    <option value="100" selected>100</option>
+                    <option value="200">200</option>
+                    <option value="500">500</option>
+                </select>
+            </div>
+            <!-- 均线开关 (默认隐藏) -->
+            <div class="ma-toggle" id="maToggle" title="显示/隐藏 9币种均线">
+                <div class="toggle-indicator"></div>
+                <span>均线</span>
+            </div>
+            <button id="refreshBtn" class="main-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                刷新
+            </button>
+        </div>
+    </div>
+
+    <div class="chart-wrapper">
+        <canvas id="fundingChart"></canvas>
+    </div>
+
+    <div class="status-bar">
+        <div class="last-updated">
+            <span class="dot"></span>
+            <span id="statusText">等待加载…</span>
+        </div>
+        <div id="recordInfo"></div>
+    </div>
+
+    <div id="errorMsg" class="error-msg"></div>
+
+    <div class="legend-note">
+        <span>费率 &gt;0 : 多头支付空头</span>
+        <span>费率 &lt;0 : 空头支付多头</span>
+        <span>每8小时结算一次</span>
+    </div>
+
+    <div class="footer-note">
+         时间显示为北京时间 (UTC+8) · 均线 = 9个币种费率算术平均
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- 配置 ----------
+        // 9个预设币种 (用于均线计算)
+        const MA_SYMBOLS = [
+            'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT',
+            'TRXUSDT', 'HYPEUSDT', 'ZECUSDT', 'DOGEUSDT'
+        ];
+
+        const COLOR_PALETTE = ['#F7931A', '#627EEA', '#F3BA2F', '#23A6D5', '#14F195', '#FF6B6B', '#A29BFE', '#FDCB6E', '#55EFC4'];
+        const API_BASE = 'https://fapi.binance.com/fapi/v1/fundingRate';
+
+        // 状态
+        let chart = null;
+        let currentSymbol = 'BTCUSDT';
+        let currentLabel = 'BTC';
+        let currentColor = '#F7931A';
+        let showMA = false;          // 均线默认隐藏
+        let cachedMAData = null;     // 缓存均线数据 { limit, data: { timestamps, averages } }
+
+        // 获取 DOM
+        const ctx = document.getElementById('fundingChart').getContext('2d');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const limitSelect = document.getElementById('limitSelect');
+        const symbolSelect = document.getElementById('symbolSelect');
+        const customSymbolInput = document.getElementById('customSymbolInput');
+        const customSymbolBtn = document.getElementById('customSymbolBtn');
+        const statusText = document.getElementById('statusText');
+        const recordInfo = document.getElementById('recordInfo');
+        const errorMsg = document.getElementById('errorMsg');
+        const currentSymbolHint = document.getElementById('currentSymbolHint');
+        const maToggle = document.getElementById('maToggle');
+
+        // ---------- 工具函数 ----------
+        function formatTimeCN(timestamp) {
+            const date = new Date(timestamp);
+            const utcHours = date.getUTCHours();
+            const utcMinutes = date.getUTCMinutes();
+            const utcYear = date.getUTCFullYear();
+            const utcMonth = date.getUTCMonth();
+            const utcDate = date.getUTCDate();
+            const beijingDate = new Date(Date.UTC(utcYear, utcMonth, utcDate, utcHours + 8, utcMinutes));
+            const year = beijingDate.getUTCFullYear();
+            const month = beijingDate.getUTCMonth() + 1;
+            const day = beijingDate.getUTCDate();
+            const hours = String(beijingDate.getUTCHours()).padStart(2, '0');
+            const minutes = String(beijingDate.getUTCMinutes()).padStart(2, '0');
+            return `${year}年${month}月${day}日 ${hours}:${minutes}`;
+        }
+
+        function showError(message) {
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = message;
+            statusText.textContent = '加载失败';
+        }
+
+        function clearError() {
+            errorMsg.style.display = 'none';
+            errorMsg.textContent = '';
+        }
+
+        function updateStatus(msg) {
+            statusText.textContent = msg;
+        }
+
+        function getColorForSymbol(symbol) {
+            const upper = symbol.toUpperCase();
+            const idx = MA_SYMBOLS.indexOf(upper);
+            if (idx >= 0) {
+                return COLOR_PALETTE[idx % COLOR_PALETTE.length];
+            }
+            let hash = 0;
+            for (let i = 0; i < upper.length; i++) {
+                hash = upper.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length];
+        }
+
+        function getLabelFromSymbol(symbol) {
+            const upper = symbol.toUpperCase();
+            if (upper.endsWith('USDT')) return upper.slice(0, -4);
+            if (upper.endsWith('USDC')) return upper.slice(0, -4);
+            if (upper.endsWith('BUSD')) return upper.slice(0, -4);
+            return upper;
+        }
+
+        async function fetchFundingHistory(symbol, limit) {
+            const url = `${API_BASE}?symbol=${symbol}&limit=${limit}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                if (response.status === 400) {
+                    throw new Error(`交易对 "${symbol}" 不存在或不是永续合约`);
+                }
+                throw new Error(`请求失败: HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (!Array.isArray(data)) {
+                throw new Error(`返回数据格式异常`);
+            }
+            if (data.length === 0) {
+                throw new Error(`交易对 "${symbol}" 暂无资金费率数据`);
+            }
+            return data;
+        }
+
+        // ---------- 计算均线数据 ----------
+        // 获取 MA_SYMBOLS 中所有币种的历史数据, 对齐时间戳, 计算每个时间点的算术平均
+        async function fetchMAData(limit) {
+            const uniqueSymbols = [...new Set(MA_SYMBOLS)];
+            const promises = uniqueSymbols.map(sym =>
+                fetchFundingHistory(sym, limit).catch(err => {
+                    console.warn(`均线币种 ${sym} 获取失败:`, err.message);
+                    return [];
+                })
+            );
+            const results = await Promise.all(promises);
+
+            const symbolDataMap = {};
+            uniqueSymbols.forEach((sym, idx) => {
+                symbolDataMap[sym] = results[idx];
+            });
+
+            // 收集所有时间戳
+            const allTimestamps = new Set();
+            MA_SYMBOLS.forEach(sym => {
+                const data = symbolDataMap[sym] || [];
+                data.forEach(item => allTimestamps.add(item.fundingTime));
+            });
+
+            const sortedTimes = Array.from(allTimestamps).sort((a, b) => a - b);
+            if (sortedTimes.length === 0) {
+                return { timestamps: [], averages: [] };
+            }
+
+            // 每个时间点计算平均费率（基于 MA_SYMBOLS 中所有币种）
+            const averages = sortedTimes.map(t => {
+                let sum = 0;
+                let count = 0;
+                MA_SYMBOLS.forEach(sym => {
+                    const data = symbolDataMap[sym] || [];
+                    const found = data.find(item => item.fundingTime === t);
+                    if (found) {
+                        sum += parseFloat(found.fundingRate);
+                        count += 1;
+                    }
+                });
+                return count > 0 ? sum / count : null;
+            });
+
+            return { timestamps: sortedTimes, averages };
+        }
+
+        // ---------- 自定义渐变0线插件 ----------
+        const gradientZeroLinePlugin = {
+            id: 'gradientZeroLine',
+            afterDraw(chart) {
+                const { ctx, chartArea, scales } = chart;
+                const yScale = scales.y;
+                if (!yScale) return;
+
+                const zeroPixel = yScale.getPixelForValue(0);
+                if (zeroPixel < chartArea.top || zeroPixel > chartArea.bottom) return;
+
+                const gradient = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+                gradient.addColorStop(0, '#ff3b3b');
+                gradient.addColorStop(0.33, '#ffb800');
+                gradient.addColorStop(0.66, '#ffeb3b');
+                gradient.addColorStop(1, '#00e676');
+
+                ctx.save();
+                // 外发光
+                ctx.beginPath();
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 8;
+                ctx.globalAlpha = 0.25;
+                ctx.moveTo(chartArea.left, zeroPixel);
+                ctx.lineTo(chartArea.right, zeroPixel);
+                ctx.stroke();
+
+                // 中层光晕
+                ctx.beginPath();
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 4;
+                ctx.globalAlpha = 0.5;
+                ctx.moveTo(chartArea.left, zeroPixel);
+                ctx.lineTo(chartArea.right, zeroPixel);
+                ctx.stroke();
+
+                // 主线
+                ctx.beginPath();
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 2.5;
+                ctx.globalAlpha = 1;
+                ctx.shadowColor = gradient;
+                ctx.shadowBlur = 12;
+                ctx.moveTo(chartArea.left, zeroPixel);
+                ctx.lineTo(chartArea.right, zeroPixel);
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        // 渲染图表 (当前币种 + 可选均线)
+        function renderChart(data, symbolKey, maData) {
+            const label = getLabelFromSymbol(symbolKey);
+            const color = getColorForSymbol(symbolKey);
+
+            currentSymbol = symbolKey;
+            currentLabel = label;
+            currentColor = color;
+
+            const timestamps = data.map(item => item.fundingTime);
+            const rates = data.map(item => parseFloat(item.fundingRate));
+            const labels = timestamps.map(t => formatTimeCN(t));
+
+            // 构建数据集
+            const datasets = [{
+                label: label,
+                data: rates,
+                borderColor: color,
+                backgroundColor: color + '18',
+                tension: 0.15,
+                pointRadius: 2,
+                pointHoverRadius: 6,
+                borderWidth: 2.5,
+                fill: false,
+                spanGaps: true,
+                yAxisID: 'y',
+            }];
+
+            // 如果显示均线且均线数据存在
+            if (showMA && maData && maData.timestamps.length > 0) {
+                const maMap = new Map();
+                maData.timestamps.forEach((t, i) => {
+                    maMap.set(t, maData.averages[i]);
+                });
+                const maAligned = timestamps.map(t => maMap.has(t) ? maMap.get(t) : null);
+
+                datasets.push({
+                    label: '9币均线',
+                    data: maAligned,
+                    borderColor: '#FFD700',
+                    backgroundColor: 'rgba(255, 215, 0, 0.06)',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    tension: 0.15,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    fill: false,
+                    spanGaps: true,
+                    yAxisID: 'y',
+                });
+            }
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#e6edf3',
+                                font: { size: 11, weight: '500' },
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 15,
+                                boxWidth: 8,
+                                boxHeight: 8,
+                            },
+                            position: 'top',
+                            align: 'center',
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f1620',
+                            titleColor: '#e6edf3',
+                            bodyColor: '#b0c4de',
+                            borderColor: '#2f3d4b',
+                            borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 12,
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].label;
+                                },
+                                label: function(context) {
+                                    let val = context.parsed.y;
+                                    if (val === null || val === undefined) return `${context.dataset.label}: --`;
+                                    return `${context.dataset.label}: ${(val * 100).toFixed(4)}%`;
+                                }
+                            }
+                        },
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: '#1a2533',
+                                drawBorder: false,
+                            },
+                            ticks: {
+                                color: '#7a8fa3',
+                                maxRotation: 35,
+                                autoSkip: true,
+                                maxTicksLimit: 12,
+                                font: { size: 10 },
+                            },
+                            title: {
+                                display: true,
+                                text: '北京时间',
+                                color: '#5e7285',
+                                font: { size: 11, weight: '500' },
+                                padding: { top: 8 }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: function(context) {
+                                    if (context.tick && context.tick.value === 0) {
+                                        return 'transparent';
+                                    }
+                                    return '#1a2533';
+                                },
+                                lineWidth: function(context) {
+                                    if (context.tick && context.tick.value === 0) {
+                                        return 0;
+                                    }
+                                    return 1;
+                                },
+                                drawBorder: false,
+                            },
+                            ticks: {
+                                color: '#7a8fa3',
+                                callback: function(value) {
+                                    return (value * 100).toFixed(4) + '%';
+                                },
+                                font: { size: 10 },
+                            },
+                            title: {
+                                display: true,
+                                text: '资金费率 (百分比)',
+                                color: '#5e7285',
+                                font: { size: 11, weight: '500' },
+                            }
+                        }
+                    },
+                    elements: {
+                        line: {
+                            borderJoinStyle: 'round',
+                            borderCapStyle: 'round',
+                        }
+                    },
+                    layout: {
+                        padding: { top: 8, bottom: 8, left: 5, right: 10 }
+                    }
+                },
+                plugins: [gradientZeroLinePlugin]
+            });
+
+            const timeRange = timestamps.length > 0 ?
+                `${formatTimeCN(timestamps[0])} 至 ${formatTimeCN(timestamps[timestamps.length-1])}` : '';
+            updateStatus(`已加载 ${timestamps.length} 个数据点`);
+            recordInfo.textContent = timeRange ? `时间范围: ${timeRange}` : '';
+            currentSymbolHint.textContent = `当前显示：${label} (${symbolKey})`;
+        }
+
+        // 主加载函数
+        async function loadData(symbolOverride) {
+            clearError();
+            refreshBtn.disabled = true;
+            const limit = parseInt(limitSelect.value, 10) || 100;
+            let symbol;
+
+            if (symbolOverride) {
+                symbol = symbolOverride.toUpperCase().trim();
+            } else {
+                symbol = symbolSelect.value;
+            }
+
+            if (!symbol) {
+                showError('请输入有效的交易对');
+                refreshBtn.disabled = false;
+                return;
+            }
+
+            updateStatus('正在获取数据…');
+            recordInfo.textContent = '';
+
+            try {
+                const data = await fetchFundingHistory(symbol, limit);
+                data.sort((a, b) => a.fundingTime - b.fundingTime);
+
+                let maData = null;
+                if (showMA) {
+                    updateStatus('正在计算均线…');
+                    if (cachedMAData && cachedMAData.limit === limit) {
+                        maData = cachedMAData.data;
+                    } else {
+                        maData = await fetchMAData(limit);
+                        cachedMAData = { limit, data: maData };
+                    }
+                }
+
+                renderChart(data, symbol, maData);
+
+            } catch (err) {
+                console.error('加载失败:', err);
+                showError(`❌ ${err.message || '未知错误'}`);
+                if (chart) {
+                    chart.destroy();
+                    chart = null;
+                }
+                currentSymbolHint.textContent = `当前显示：${symbol} (加载失败)`;
+            } finally {
+                refreshBtn.disabled = false;
+                customSymbolBtn.disabled = false;
+            }
+        }
+
+        // 切换均线显示/隐藏
+        async function toggleMA() {
+            showMA = !showMA;
+            maToggle.classList.toggle('active', showMA);
+
+            if (!chart) return;
+
+            const currentVal = currentSymbol;
+            await loadData(currentVal);
+        }
+
+        // ---------- 事件绑定 ----------
+        refreshBtn.addEventListener('click', () => loadData());
+
+        limitSelect.addEventListener('change', () => {
+            cachedMAData = null;
+            const customVal = customSymbolInput.value.trim();
+            if (customVal) {
+                loadData(customVal);
+            } else {
+                loadData(symbolSelect.value);
+            }
+        });
+
+        symbolSelect.addEventListener('change', () => {
+            customSymbolInput.value = '';
+            loadData(symbolSelect.value);
+        });
+
+        customSymbolBtn.addEventListener('click', () => {
+            const val = customSymbolInput.value.trim();
+            if (!val) {
+                showError('请输入交易对，例如 DOGEUSDT');
+                return;
+            }
+            customSymbolBtn.disabled = true;
+            symbolSelect.selectedIndex = -1;
+            loadData(val);
+        });
+
+        customSymbolInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                customSymbolBtn.click();
+            }
+        });
+
+        maToggle.addEventListener('click', toggleMA);
+
+        window.addEventListener('load', () => {
+            setTimeout(() => loadData('BTCUSDT'), 100);
+        });
+
+        window.addEventListener('resize', () => {
+            if (chart) {
+                chart.resize();
+            }
+        });
+    })();
+</script>
+</body>
+</html>
