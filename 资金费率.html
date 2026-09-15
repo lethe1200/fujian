@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>币安资金费率 · 多币种走势与均线</title>
-    <!-- Chart.js 轻量绘图 -->
+    <title>币安资金费率 + 价格 · 多币种走势与均线</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -84,7 +83,6 @@
             align-items: center;
         }
 
-        /* 币种选择器 */
         .symbol-selector {
             display: flex;
             align-items: center;
@@ -123,7 +121,6 @@
             background-color: #1a2533;
         }
 
-        /* 自定义币种输入 */
         .custom-symbol-box {
             display: flex;
             align-items: center;
@@ -187,7 +184,6 @@
             pointer-events: none;
         }
 
-        /* 数量选择器 */
         .limit-selector {
             display: flex;
             align-items: center;
@@ -204,7 +200,6 @@
             white-space: nowrap;
         }
 
-        /* 均线开关 */
         .ma-toggle {
             display: flex;
             align-items: center;
@@ -393,7 +388,6 @@
             letter-spacing: 0.3px;
         }
 
-        /* 小屏适配 */
         @media (max-width: 900px) {
             .container { padding: 1.2rem; }
             .title-section h1 { font-size: 1.5rem; }
@@ -409,13 +403,12 @@
     <div class="header">
         <div class="title-section">
             <h1>
-                📊 资金费率走势
+                📊 资金费率 & 价格
                 <span>Binance 永续</span>
             </h1>
             <div class="sub" id="currentSymbolHint">当前显示：BTC</div>
         </div>
         <div class="controls">
-            <!-- 币种选择 (9个预设) -->
             <div class="symbol-selector">
                 <label for="symbolSelect">币种</label>
                 <select id="symbolSelect">
@@ -430,13 +423,11 @@
                     <option value="DOGEUSDT">DOGE</option>
                 </select>
             </div>
-            <!-- 自定义币种输入 -->
             <div class="custom-symbol-box">
                 <label for="customSymbolInput">任意币种</label>
                 <input type="text" id="customSymbolInput" placeholder="如 1000PEPEUSDT" maxlength="20" spellcheck="false">
                 <button id="customSymbolBtn" type="button">查询</button>
             </div>
-            <!-- 数据量选择 -->
             <div class="limit-selector">
                 <label for="limitSelect">数据量</label>
                 <select id="limitSelect">
@@ -446,7 +437,6 @@
                     <option value="500">500</option>
                 </select>
             </div>
-            <!-- 均线开关 (默认隐藏) -->
             <div class="ma-toggle" id="maToggle" title="显示/隐藏 9币种均线">
                 <div class="toggle-indicator"></div>
                 <span>均线</span>
@@ -476,34 +466,43 @@
         <span>费率 &gt;0 : 多头支付空头</span>
         <span>费率 &lt;0 : 空头支付多头</span>
         <span>每8小时结算一次</span>
+        <span style="color:#FFFFFF;">—— 费率线 (白)</span>
+        <span style="color:#FFD700;">—— 价格线 (右轴, 8h K线收盘价)</span>
     </div>
 
     <div class="footer-note">
-         时间显示为北京时间 (UTC+8) · 均线 = 9个币种费率算术平均
+        时间显示为北京时间 (UTC+8) · 均线 = 9个币种费率算术平均 · 价格来自币安永续 8h K线
     </div>
 </div>
 
 <script>
     (function() {
         // ---------- 配置 ----------
-        // 9个预设币种 (用于均线计算)
         const MA_SYMBOLS = [
             'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT',
             'TRXUSDT', 'HYPEUSDT', 'ZECUSDT', 'DOGEUSDT'
         ];
 
-        const COLOR_PALETTE = ['#F7931A', '#627EEA', '#F3BA2F', '#23A6D5', '#14F195', '#FF6B6B', '#A29BFE', '#FDCB6E', '#55EFC4'];
+        // 费率线统一白色
+        const RATE_COLOR = '#FFFFFF';
+        // 均线颜色 (金色)
+        const MA_COLOR = '#FFD700';
+        // 价格线颜色 (金色, 也可调整)
+        const PRICE_COLOR = '#FFD700';
+
         const API_BASE = 'https://fapi.binance.com/fapi/v1/fundingRate';
+        const KLINE_API = 'https://fapi.binance.com/fapi/v1/klines';
+        const PRICE_TENSION = 0.15;
 
         // 状态
         let chart = null;
         let currentSymbol = 'BTCUSDT';
         let currentLabel = 'BTC';
-        let currentColor = '#F7931A';
-        let showMA = false;          // 均线默认隐藏
-        let cachedMAData = null;     // 缓存均线数据 { limit, data: { timestamps, averages } }
+        let showMA = false;
+        let cachedMAData = null;
+        let cachedPriceData = { symbol: null, klines: null, limit: 0 };
 
-        // 获取 DOM
+        // DOM
         const ctx = document.getElementById('fundingChart').getContext('2d');
         const refreshBtn = document.getElementById('refreshBtn');
         const limitSelect = document.getElementById('limitSelect');
@@ -548,19 +547,6 @@
             statusText.textContent = msg;
         }
 
-        function getColorForSymbol(symbol) {
-            const upper = symbol.toUpperCase();
-            const idx = MA_SYMBOLS.indexOf(upper);
-            if (idx >= 0) {
-                return COLOR_PALETTE[idx % COLOR_PALETTE.length];
-            }
-            let hash = 0;
-            for (let i = 0; i < upper.length; i++) {
-                hash = upper.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length];
-        }
-
         function getLabelFromSymbol(symbol) {
             const upper = symbol.toUpperCase();
             if (upper.endsWith('USDT')) return upper.slice(0, -4);
@@ -569,6 +555,7 @@
             return upper;
         }
 
+        // 获取资金费率历史
         async function fetchFundingHistory(symbol, limit) {
             const url = `${API_BASE}?symbol=${symbol}&limit=${limit}`;
             const response = await fetch(url);
@@ -588,8 +575,24 @@
             return data;
         }
 
-        // ---------- 计算均线数据 ----------
-        // 获取 MA_SYMBOLS 中所有币种的历史数据, 对齐时间戳, 计算每个时间点的算术平均
+        // 获取价格K线 (8小时级别)
+        async function fetchPriceKlines(symbol, limit) {
+            const url = `${KLINE_API}?symbol=${symbol}&interval=8h&limit=${limit}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`价格K线请求失败: HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (!Array.isArray(data) || data.length === 0) {
+                throw new Error(`价格K线数据为空`);
+            }
+            return data.map(item => ({
+                openTime: item[0],
+                closePrice: parseFloat(item[4])
+            }));
+        }
+
+        // 计算均线数据
         async function fetchMAData(limit) {
             const uniqueSymbols = [...new Set(MA_SYMBOLS)];
             const promises = uniqueSymbols.map(sym =>
@@ -605,7 +608,6 @@
                 symbolDataMap[sym] = results[idx];
             });
 
-            // 收集所有时间戳
             const allTimestamps = new Set();
             MA_SYMBOLS.forEach(sym => {
                 const data = symbolDataMap[sym] || [];
@@ -617,7 +619,6 @@
                 return { timestamps: [], averages: [] };
             }
 
-            // 每个时间点计算平均费率（基于 MA_SYMBOLS 中所有币种）
             const averages = sortedTimes.map(t => {
                 let sum = 0;
                 let count = 0;
@@ -635,7 +636,30 @@
             return { timestamps: sortedTimes, averages };
         }
 
-        // ---------- 自定义渐变0线插件 ----------
+        // 价格对齐到资金费率时间戳
+        function alignPricesToTimestamps(klines, timestamps) {
+            if (!klines || klines.length === 0) return null;
+            const priceMap = new Map();
+            klines.forEach(k => priceMap.set(k.openTime, k.closePrice));
+
+            const TOLERANCE_MS = 8 * 3600 * 1000;
+
+            return timestamps.map(t => {
+                if (priceMap.has(t)) return priceMap.get(t);
+                let closestPrice = null;
+                let minDiff = Infinity;
+                for (const [pt, pv] of priceMap) {
+                    const diff = Math.abs(pt - t);
+                    if (diff < minDiff && diff < TOLERANCE_MS) {
+                        minDiff = diff;
+                        closestPrice = pv;
+                    }
+                }
+                return closestPrice;
+            });
+        }
+
+        // ---------- 渐变0线插件 ----------
         const gradientZeroLinePlugin = {
             id: 'gradientZeroLine',
             afterDraw(chart) {
@@ -653,7 +677,6 @@
                 gradient.addColorStop(1, '#00e676');
 
                 ctx.save();
-                // 外发光
                 ctx.beginPath();
                 ctx.strokeStyle = gradient;
                 ctx.lineWidth = 8;
@@ -662,7 +685,6 @@
                 ctx.lineTo(chartArea.right, zeroPixel);
                 ctx.stroke();
 
-                // 中层光晕
                 ctx.beginPath();
                 ctx.strokeStyle = gradient;
                 ctx.lineWidth = 4;
@@ -671,7 +693,6 @@
                 ctx.lineTo(chartArea.right, zeroPixel);
                 ctx.stroke();
 
-                // 主线
                 ctx.beginPath();
                 ctx.strokeStyle = gradient;
                 ctx.lineWidth = 2.5;
@@ -685,25 +706,25 @@
             }
         };
 
-        // 渲染图表 (当前币种 + 可选均线)
-        function renderChart(data, symbolKey, maData) {
+        // 渲染图表
+        function renderChart(data, symbolKey, maData, priceKlines) {
             const label = getLabelFromSymbol(symbolKey);
-            const color = getColorForSymbol(symbolKey);
 
             currentSymbol = symbolKey;
             currentLabel = label;
-            currentColor = color;
 
             const timestamps = data.map(item => item.fundingTime);
             const rates = data.map(item => parseFloat(item.fundingRate));
             const labels = timestamps.map(t => formatTimeCN(t));
 
-            // 构建数据集
+            const priceAligned = alignPricesToTimestamps(priceKlines, timestamps);
+
+            // 费率线: 统一白色
             const datasets = [{
-                label: label,
+                label: label + ' 费率',
                 data: rates,
-                borderColor: color,
-                backgroundColor: color + '18',
+                borderColor: RATE_COLOR,
+                backgroundColor: 'rgba(255, 255, 255, 0.06)',
                 tension: 0.15,
                 pointRadius: 2,
                 pointHoverRadius: 6,
@@ -713,7 +734,7 @@
                 yAxisID: 'y',
             }];
 
-            // 如果显示均线且均线数据存在
+            // 均线
             if (showMA && maData && maData.timestamps.length > 0) {
                 const maMap = new Map();
                 maData.timestamps.forEach((t, i) => {
@@ -724,7 +745,7 @@
                 datasets.push({
                     label: '9币均线',
                     data: maAligned,
-                    borderColor: '#FFD700',
+                    borderColor: MA_COLOR,
                     backgroundColor: 'rgba(255, 215, 0, 0.06)',
                     borderWidth: 2,
                     borderDash: [6, 4],
@@ -737,8 +758,94 @@
                 });
             }
 
+            // 价格线
+            const hasPrice = priceAligned && priceAligned.some(v => v !== null && v !== undefined);
+            if (hasPrice) {
+                datasets.push({
+                    label: label + ' 价格 (右轴)',
+                    data: priceAligned,
+                    borderColor: PRICE_COLOR,
+                    backgroundColor: 'rgba(255, 215, 0, 0.04)',
+                    borderWidth: 2,
+                    tension: PRICE_TENSION,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    fill: false,
+                    spanGaps: true,
+                    yAxisID: 'y1',
+                });
+            }
+
             if (chart) {
                 chart.destroy();
+            }
+
+            const scalesConfig = {
+                x: {
+                    grid: { color: '#1a2533', drawBorder: false },
+                    ticks: {
+                        color: '#7a8fa3',
+                        maxRotation: 35,
+                        autoSkip: true,
+                        maxTicksLimit: 12,
+                        font: { size: 10 },
+                    },
+                    title: {
+                        display: true,
+                        text: '北京时间',
+                        color: '#5e7285',
+                        font: { size: 11, weight: '500' },
+                        padding: { top: 8 }
+                    }
+                },
+                y: {
+                    grid: {
+                        color: function(context) {
+                            if (context.tick && context.tick.value === 0) return 'transparent';
+                            return '#1a2533';
+                        },
+                        lineWidth: function(context) {
+                            if (context.tick && context.tick.value === 0) return 0;
+                            return 1;
+                        },
+                        drawBorder: false,
+                    },
+                    ticks: {
+                        color: '#7a8fa3',
+                        callback: function(value) {
+                            return (value * 100).toFixed(4) + '%';
+                        },
+                        font: { size: 10 },
+                    },
+                    title: {
+                        display: true,
+                        text: '资金费率 (百分比)',
+                        color: '#5e7285',
+                        font: { size: 11, weight: '500' },
+                    }
+                }
+            };
+
+            if (hasPrice) {
+                scalesConfig.y1 = {
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    ticks: {
+                        color: PRICE_COLOR,
+                        callback: function(value) {
+                            if (value >= 1000) return '$' + value.toFixed(0);
+                            if (value >= 1) return '$' + value.toFixed(2);
+                            return '$' + value.toFixed(4);
+                        },
+                        font: { size: 10 },
+                    },
+                    title: {
+                        display: true,
+                        text: '价格 (USDT)',
+                        color: PRICE_COLOR,
+                        font: { size: 11, weight: '500' },
+                    }
+                };
             }
 
             chart = new Chart(ctx, {
@@ -782,65 +889,20 @@
                                     return context[0].label;
                                 },
                                 label: function(context) {
-                                    let val = context.parsed.y;
-                                    if (val === null || val === undefined) return `${context.dataset.label}: --`;
-                                    return `${context.dataset.label}: ${(val * 100).toFixed(4)}%`;
+                                    const datasetLabel = context.dataset.label || '';
+                                    const val = context.parsed.y;
+                                    if (val === null || val === undefined) return `${datasetLabel}: --`;
+                                    if (datasetLabel.includes('价格')) {
+                                        if (val >= 1000) return `${datasetLabel}: $${val.toFixed(2)}`;
+                                        if (val >= 1) return `${datasetLabel}: $${val.toFixed(4)}`;
+                                        return `${datasetLabel}: $${val.toFixed(6)}`;
+                                    }
+                                    return `${datasetLabel}: ${(val * 100).toFixed(4)}%`;
                                 }
                             }
                         },
                     },
-                    scales: {
-                        x: {
-                            grid: {
-                                color: '#1a2533',
-                                drawBorder: false,
-                            },
-                            ticks: {
-                                color: '#7a8fa3',
-                                maxRotation: 35,
-                                autoSkip: true,
-                                maxTicksLimit: 12,
-                                font: { size: 10 },
-                            },
-                            title: {
-                                display: true,
-                                text: '北京时间',
-                                color: '#5e7285',
-                                font: { size: 11, weight: '500' },
-                                padding: { top: 8 }
-                            }
-                        },
-                        y: {
-                            grid: {
-                                color: function(context) {
-                                    if (context.tick && context.tick.value === 0) {
-                                        return 'transparent';
-                                    }
-                                    return '#1a2533';
-                                },
-                                lineWidth: function(context) {
-                                    if (context.tick && context.tick.value === 0) {
-                                        return 0;
-                                    }
-                                    return 1;
-                                },
-                                drawBorder: false,
-                            },
-                            ticks: {
-                                color: '#7a8fa3',
-                                callback: function(value) {
-                                    return (value * 100).toFixed(4) + '%';
-                                },
-                                font: { size: 10 },
-                            },
-                            title: {
-                                display: true,
-                                text: '资金费率 (百分比)',
-                                color: '#5e7285',
-                                font: { size: 11, weight: '500' },
-                            }
-                        }
-                    },
+                    scales: scalesConfig,
                     elements: {
                         line: {
                             borderJoinStyle: 'round',
@@ -856,9 +918,10 @@
 
             const timeRange = timestamps.length > 0 ?
                 `${formatTimeCN(timestamps[0])} 至 ${formatTimeCN(timestamps[timestamps.length-1])}` : '';
-            updateStatus(`已加载 ${timestamps.length} 个数据点`);
+            const lastPrice = priceAligned ? priceAligned.filter(v => v !== null).pop() : null;
+            updateStatus(`已加载 ${timestamps.length} 个数据点${lastPrice ? ' · 最新价 $' + lastPrice.toFixed(2) : ''}`);
             recordInfo.textContent = timeRange ? `时间范围: ${timeRange}` : '';
-            currentSymbolHint.textContent = `当前显示：${label} (${symbolKey})`;
+            currentSymbolHint.textContent = `当前显示：${label} (${symbolKey})${lastPrice ? ' · 最新价 $' + lastPrice.toFixed(2) : ''}`;
         }
 
         // 主加载函数
@@ -884,21 +947,43 @@
             recordInfo.textContent = '';
 
             try {
-                const data = await fetchFundingHistory(symbol, limit);
-                data.sort((a, b) => a.fundingTime - b.fundingTime);
+                const fundingPromise = fetchFundingHistory(symbol, limit);
 
-                let maData = null;
+                let maPromise = Promise.resolve(null);
                 if (showMA) {
-                    updateStatus('正在计算均线…');
                     if (cachedMAData && cachedMAData.limit === limit) {
-                        maData = cachedMAData.data;
+                        maPromise = Promise.resolve(cachedMAData.data);
                     } else {
-                        maData = await fetchMAData(limit);
-                        cachedMAData = { limit, data: maData };
+                        maPromise = fetchMAData(limit).then(maData => {
+                            cachedMAData = { limit, data: maData };
+                            return maData;
+                        });
                     }
                 }
 
-                renderChart(data, symbol, maData);
+                let pricePromise;
+                if (cachedPriceData.symbol === symbol && cachedPriceData.limit === limit && cachedPriceData.klines) {
+                    pricePromise = Promise.resolve(cachedPriceData.klines);
+                } else {
+                    pricePromise = fetchPriceKlines(symbol, limit)
+                        .then(klines => {
+                            cachedPriceData = { symbol, klines, limit };
+                            return klines;
+                        })
+                        .catch(err => {
+                            console.warn('价格K线获取失败:', err.message);
+                            return null;
+                        });
+                }
+
+                const [data, maData, priceKlines] = await Promise.all([fundingPromise, maPromise, pricePromise]);
+
+                if (!data || data.length === 0) {
+                    throw new Error(`交易对 "${symbol}" 暂无资金费率数据`);
+                }
+                data.sort((a, b) => a.fundingTime - b.fundingTime);
+
+                renderChart(data, symbol, maData, priceKlines);
 
             } catch (err) {
                 console.error('加载失败:', err);
@@ -914,15 +999,12 @@
             }
         }
 
-        // 切换均线显示/隐藏
+        // 切换均线
         async function toggleMA() {
             showMA = !showMA;
             maToggle.classList.toggle('active', showMA);
-
             if (!chart) return;
-
-            const currentVal = currentSymbol;
-            await loadData(currentVal);
+            await loadData(currentSymbol);
         }
 
         // ---------- 事件绑定 ----------
@@ -930,6 +1012,7 @@
 
         limitSelect.addEventListener('change', () => {
             cachedMAData = null;
+            cachedPriceData = { symbol: null, klines: null, limit: 0 };
             const customVal = customSymbolInput.value.trim();
             if (customVal) {
                 loadData(customVal);
